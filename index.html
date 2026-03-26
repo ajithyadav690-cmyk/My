@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Aria AI | Your Empathetic Assistant</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        aria: {
+                            rose: '#ec4899',
+                            softRose: '#fdf2f8',
+                            darkBg: '#121212',
+                            darkCard: '#1e1e1e',
+                            darkBorder: '#2d2d2d'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root { --safe-area-inset-bottom: env(safe-area-inset-bottom); }
+        body, html { height: 100%; margin: 0; padding: 0; overflow: hidden; background-color: #fdf2f8; }
+        .dark body, .dark html { background-color: #121212; }
+        
+        #chat-container::-webkit-scrollbar { width: 5px; }
+        #chat-container::-webkit-scrollbar-thumb { background: #fbcfe8; border-radius: 10px; }
+        .dark #chat-container::-webkit-scrollbar-thumb { background: #333; }
+
+        .markdown-body { line-height: 1.6; font-size: 0.95rem; }
+        .markdown-body pre { background: #1a1a1a; color: #efefef; padding: 1rem; border-radius: 0.75rem; overflow-x: auto; margin: 0.5rem 0; border: 1px solid #333; }
+        .markdown-body code { font-family: 'Courier New', Courier, monospace; background: rgba(236, 72, 153, 0.1); padding: 0.2rem 0.4rem; border-radius: 4px; color: #be185d; }
+        .dark .markdown-body code { color: #f472b6; background: rgba(236, 72, 153, 0.2); }
+
+        .typing-dot { animation: typing 1.4s infinite; display: inline-block; width: 4px; height: 4px; background: #ec4899; border-radius: 50%; margin: 0 2px; }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-4px); } }
+        
+        #sidebar { transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .mobile-bottom-nav { padding-bottom: calc(1rem + var(--safe-area-inset-bottom)); }
+    </style>
+</head>
+<body class="text-slate-800 dark:text-slate-200">
+
+    <div id="loading" class="fixed inset-0 flex flex-col items-center justify-center bg-aria-softRose dark:bg-aria-darkBg z-[100]">
+        <div class="relative flex items-center justify-center">
+            <div class="w-16 h-16 border-4 border-rose-200 border-t-rose-500 rounded-full animate-spin"></div>
+            <i class="fa-solid fa-heart absolute text-rose-500 animate-pulse"></i>
+        </div>
+        <p class="mt-4 font-medium text-rose-600 dark:text-rose-400">Aria is getting ready...</p>
+    </div>
+
+    <div id="app" class="hidden flex h-screen w-full relative overflow-hidden">
+        
+        <div id="overlay" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-20 hidden lg:hidden"></div>
+
+        <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 z-30 w-72 bg-white dark:bg-aria-darkCard border-r border-rose-100 dark:border-aria-darkBorder transform -translate-x-full lg:translate-x-0 flex flex-col">
+            <div class="p-6">
+                <div class="flex items-center gap-3 mb-8">
+                    <div class="w-10 h-10 bg-rose-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-rose-500/30">
+                        <i class="fa-solid fa-sparkles"></i>
+                    </div>
+                    <h1 class="text-xl font-bold tracking-tight text-rose-600 dark:text-rose-400">Aria AI</h1>
+                </div>
+                <button id="new-chat-btn" class="w-full flex items-center justify-center gap-2 bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 text-rose-600 dark:text-rose-300 py-3 rounded-2xl font-semibold transition-all">
+                    <i class="fa-solid fa-plus"></i> New Journey
+                </button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto px-4 space-y-2 no-scrollbar" id="chat-history-list">
+                </div>
+
+            <div class="p-4 border-t border-rose-100 dark:border-aria-darkBorder">
+                <button id="open-settings-btn" class="w-full flex items-center gap-3 p-3 text-slate-500 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/10 rounded-xl transition-all">
+                    <i class="fa-solid fa-gear"></i>
+                    <span class="text-sm font-medium">Settings & Persona</span>
+                </button>
+            </div>
+        </aside>
+
+        <main class="flex-1 flex flex-col min-w-0 bg-white/50 dark:bg-transparent relative">
+            
+            <header class="flex items-center justify-between p-4 lg:px-8 border-b border-rose-100/50 dark:border-aria-darkBorder/50">
+                <button id="menu-btn" class="lg:hidden p-2 text-rose-500"><i class="fa-solid fa-bars-staggered text-xl"></i></button>
+                <div class="flex items-center gap-2">
+                    <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                    <span id="model-badge" class="text-xs font-bold uppercase tracking-widest text-slate-400">Deepseek-R1</span>
+                </div>
+                <button id="theme-btn" class="p-2 text-slate-400 hover:text-rose-500 transition-colors">
+                    <i class="fa-solid fa-moon text-xl" id="theme-icon"></i>
+                </button>
+            </header>
+
+            <div id="chat-container" class="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 pb-40">
+                <div id="welcome-screen" class="h-full flex flex-col items-center justify-center text-center max-w-md mx-auto space-y-4">
+                    <div class="w-20 h-20 bg-rose-100 dark:bg-rose-900/20 rounded-full flex items-center justify-center text-rose-500 text-3xl mb-2">
+                        <i class="fa-solid fa-face-smile-wink"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold dark:text-white">Hello, I'm Aria.</h2>
+                    <p class="text-slate-500 dark:text-slate-400 italic">"I'm here to listen, support, and help you create. How are you feeling today?"</p>
+                </div>
+            </div>
+
+            <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-aria-softRose dark:from-aria-darkBg via-aria-softRose/95 dark:via-aria-darkBg/95 to-transparent p-4 md:p-8 mobile-bottom-nav">
+                <div class="max-w-4xl mx-auto relative group">
+                    <div class="absolute -inset-1 bg-gradient-to-r from-rose-400 to-pink-500 rounded-3xl blur opacity-20 group-focus-within:opacity-40 transition duration-500"></div>
+                    <div class="relative bg-white dark:bg-aria-darkCard rounded-2xl shadow-xl border border-rose-100 dark:border-aria-darkBorder flex items-end p-2 pr-3">
+                        <textarea id="user-input" rows="1" class="w-full bg-transparent border-none focus:ring-0 py-3 px-4 resize-none max-h-48 text-slate-800 dark:text-white placeholder-slate-400" placeholder="Message Aria..."></textarea>
+                        <button id="send-btn" class="mb-1 bg-rose-500 hover:bg-rose-600 disabled:bg-slate-300 text-white w-10 h-10 rounded-xl flex items-center justify-center transition-all shadow-lg shadow-rose-500/30">
+                            <i class="fa-solid fa-arrow-up"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <div id="modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-aria-darkCard w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl border border-rose-100 dark:border-aria-darkBorder animate-in fade-in zoom-in duration-200">
+            <div class="p-6 border-b border-rose-50 dark:border-aria-darkBorder flex justify-between items-center">
+                <h3 class="text-lg font-bold">Preferences</h3>
+                <button id="close-modal" class="text-slate-400 hover:text-rose-500"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-6 space-y-6">
+                <div class="space-y-2">
+                    <label class="text-xs font-bold uppercase tracking-widest text-slate-400">OpenRouter API Key</label>
+                    <input type="password" id="api-key" class="w-full bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-aria-darkBorder rounded-xl px-4 py-3 outline-none focus:border-rose-500 transition-colors" placeholder="sk-or-v1-...">
+                </div>
+                <div class="space-y-2">
+                    <label class="text-xs font-bold uppercase tracking-widest text-slate-400">Persona (System Prompt)</label>
+                    <textarea id="system-prompt" rows="4" class="w-full bg-slate-50 dark:bg-black/20 border border-slate-200 dark:border-aria-darkBorder rounded-xl px-4 py-3 outline-none focus:border-rose-500 transition-colors text-sm resize-none"></textarea>
+                </div>
+            </div>
+            <div class="p-6 bg-slate-50 dark:bg-black/10 flex justify-end">
+                <button id="save-settings" class="bg-rose-500 hover:bg-rose-600 text-white px-8 py-3 rounded-xl font-bold transition-all">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- ARCHITECT'S SCRIPT (VANILLA JS) ---
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // Initial State
+            let state = {
+                apiKey: localStorage.getItem('aria_key') || '',
+                model: 'deepseek/deepseek-r1:free',
+                systemPrompt: localStorage.getItem('aria_prompt') || "You are Aria, a warm, intuitive, and highly empathetic female AI assistant. You respond with emotional intelligence, acknowledging the user's feelings while providing expert help. Your tone is supportive, slightly poetic, and graceful. You use 'we' and 'us' to build a collaborative bond.",
+                chats: JSON.parse(localStorage.getItem('aria_chats')) || [],
+                activeChatId: null,
+                isDark: localStorage.getItem('aria_theme') === 'dark'
+            };
+
+            const dom = {
+                app: document.getElementById('app'),
+                loading: document.getElementById('loading'),
+                chatContainer: document.getElementById('chat-container'),
+                chatHistory: document.getElementById('chat-history-list'),
+                userInput: document.getElementById('user-input'),
+                sendBtn: document.getElementById('send-btn'),
+                newChatBtn: document.getElementById('new-chat-btn'),
+                menuBtn: document.getElementById('menu-btn'),
+                sidebar: document.getElementById('sidebar'),
+                overlay: document.getElementById('overlay'),
+                themeBtn: document.getElementById('theme-btn'),
+                themeIcon: document.getElementById('theme-icon'),
+                modal: document.getElementById('modal'),
+                openSettings: document.getElementById('open-settings-btn'),
+                closeModal: document.getElementById('close-modal'),
+                saveSettings: document.getElementById('save-settings'),
+                apiKeyInput: document.getElementById('api-key'),
+                promptInput: document.getElementById('system-prompt'),
+                welcome: document.getElementById('welcome-screen')
+            };
+
+            // Initialization
+            const init = () => {
+                applyTheme();
+                renderHistory();
+                dom.apiKeyInput.value = state.apiKey;
+                dom.promptInput.value = state.systemPrompt;
+                
+                setTimeout(() => {
+                    dom.loading.classList.add('hidden');
+                    dom.app.classList.remove('hidden');
+                }, 800);
+            };
+
+            const applyTheme = () => {
+                if (state.isDark) {
+                    document.documentElement.classList.add('dark');
+                    dom.themeIcon.className = 'fa-solid fa-sun';
+                } else {
+                    document.documentElement.classList.remove('dark');
+                    dom.themeIcon.className = 'fa-solid fa-moon';
+                }
+            };
+
+            // --- CHAT LOGIC ---
+            const createChat = () => {
+                const newChat = {
+                    id: Date.now().toString(),
+                    title: 'New Connection',
+                    messages: []
+                };
+                state.chats.unshift(newChat);
+                state.activeChatId = newChat.id;
+                updateStorage();
+                renderHistory();
+                renderMessages();
+                closeSidebar();
+            };
+
+            const renderHistory = () => {
+                dom.chatHistory.innerHTML = state.chats.map(chat => `
+                    <div class="group flex items-center justify-between p-3 rounded-xl cursor-pointer transition-all ${state.activeChatId === chat.id ? 'bg-rose-500/10 text-rose-600 ring-1 ring-rose-500/20' : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-white/5'}" onclick="setActiveChat('${chat.id}')">
+                        <div class="flex items-center gap-3 truncate">
+                            <i class="fa-regular fa-comment-dots text-sm"></i>
+                            <span class="text-sm font-medium truncate">${chat.title}</span>
+                        </div>
+                        <button onclick="event.stopPropagation(); deleteChat('${chat.id}')" class="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-opacity">
+                            <i class="fa-solid fa-trash-can text-xs"></i>
+                        </button>
+                    </div>
+                `).join('');
+            };
+
+            window.setActiveChat = (id) => {
+                state.activeChatId = id;
+                renderHistory();
+                renderMessages();
+                closeSidebar();
+            };
+
+            window.deleteChat = (id) => {
+                state.chats = state.chats.filter(c => c.id !== id);
+                if (state.activeChatId === id) state.activeChatId = null;
+                updateStorage();
+                renderHistory();
+                renderMessages();
+            };
+
+            const renderMessages = () => {
+                const chat = state.chats.find(c => c.id === state.activeChatId);
+                if (!chat || chat.messages.length === 0) {
+                    dom.chatContainer.innerHTML = '';
+                    dom.chatContainer.appendChild(dom.welcome);
+                    return;
+                }
+                
+                dom.chatContainer.innerHTML = chat.messages.map(msg => `
+                    <div class="flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2">
+                        <div class="${msg.role === 'user' ? 'bg-rose-500 text-white rounded-2xl rounded-tr-none' : 'bg-white dark:bg-aria-darkCard border border-rose-100 dark:border-aria-darkBorder rounded-2xl rounded-tl-none'} p-4 shadow-sm max-w-[85%] md:max-w-[75%]">
+                            <div class="markdown-body">${marked.parse(msg.content)}</div>
+                        </div>
+                    </div>
+                `).join('');
+                dom.chatContainer.scrollTop = dom.chatContainer.scrollHeight;
+            };
+
+            // --- API STREAMING ---
+            const handleSend = async () => {
+                const text = dom.userInput.value.trim();
+                if (!text || isGenerating) return;
+                if (!state.apiKey) { alert("Honey, please add your API Key in Settings first!"); openModal(); return; }
+
+                if (!state.activeChatId) {
+                    const id = Date.now().toString();
+                    state.chats.unshift({ id, title: text.slice(0, 25) + '...', messages: [] });
+                    state.activeChatId = id;
+                }
+
+                const chat = state.chats.find(c => c.id === state.activeChatId);
+                chat.messages.push({ role: 'user', content: text });
+                
+                // Set title if it's the first message
+                if (chat.messages.length === 1) chat.title = text.slice(0, 30);
+                
+                dom.userInput.value = '';
+                dom.userInput.style.height = 'auto';
+                renderMessages();
+                renderHistory();
+
+                // Add empty AI bubble for streaming
+                const aiBubbleId = 'ai-' + Date.now();
+                const aiWrapper = document.createElement('div');
+                aiWrapper.className = 'flex justify-start animate-in fade-in';
+                aiWrapper.innerHTML = `
+                    <div class="bg-white dark:bg-aria-darkCard border border-rose-100 dark:border-aria-darkBorder rounded-2xl rounded-tl-none p-4 shadow-sm max-w-[85%] md:max-w-[75%]">
+                        <div id="${aiBubbleId}" class="markdown-body">
+                            <div class="flex items-center gap-1 h-6">
+                                <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                dom.chatContainer.appendChild(aiWrapper);
+                dom.chatContainer.scrollTop = dom.chatContainer.scrollHeight;
+
+                isGenerating = true;
+                dom.sendBtn.disabled = true;
+
+                let fullContent = "";
+                try {
+                    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+                        method: "POST",
+                        headers: {
+                            "Authorization": `Bearer ${state.apiKey}`,
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            model: state.model,
+                            messages: [
+                                { role: "system", content: state.systemPrompt },
+                                ...chat.messages
+                            ],
+                            stream: true
+                        })
+                    });
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    const aiContentEl = document.getElementById(aiBubbleId);
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+                        
+                        const chunk = decoder.decode(value);
+                        const lines = chunk.split('\n').filter(line => line.trim().startsWith('data: '));
+                        
+                        for (const line of lines) {
+                            const message = line.replace(/^data: /, '');
+                            if (message === '[DONE]') break;
+                            
+                            try {
+                                const parsed = JSON.parse(message);
+                                const delta = parsed.choices[0].delta.content || "";
+                                fullContent += delta;
+                                aiContentEl.innerHTML = marked.par
